@@ -12,8 +12,11 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
+import static org.mockito.AdditionalMatchers.aryEq;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.isNull;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
@@ -271,6 +274,7 @@ class UserControllerTest {
                 .content("{\"roles\":[\"PLATFORM_ADMIN\"]}"))
         .andExpect(status().isForbidden())
         .andExpect(jsonPath("$.error").value("ROLE_ASSIGN_FORBIDDEN"));
+    verify(userService, never()).update(any(), any(), any(), any(), any(), any(), any(), any());
   }
 
   @Test
@@ -290,5 +294,15 @@ class UserControllerTest {
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("{\"roles\":[\"DUTY_OFFICER\"]}"))
         .andExpect(status().isOk());
+    verify(userService)
+        .update(
+            eq(1L),
+            eq(1L),
+            isNull(),
+            isNull(),
+            isNull(),
+            isNull(),
+            aryEq(new String[] {"DUTY_OFFICER"}),
+            isNull());
   }
 }

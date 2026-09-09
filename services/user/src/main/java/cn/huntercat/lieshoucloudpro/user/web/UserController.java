@@ -154,7 +154,8 @@ public class UserController {
   @ApiResponses({
     @ApiResponse(responseCode = "200", description = "Updated user"),
     @ApiResponse(responseCode = "404", description = "User not found"),
-    @ApiResponse(responseCode = "400", description = "Invalid status value")
+    @ApiResponse(responseCode = "400", description = "Invalid status value"),
+    @ApiResponse(responseCode = "403", description = "无权分配/调整角色（ROLE_ASSIGN_FORBIDDEN）")
   })
   @PutMapping("/{id}")
   public ResponseEntity<?> update(
@@ -166,6 +167,7 @@ public class UserController {
       HttpServletRequest req) {
     // 角色授予守卫（2026-09-09 · 低级管理员授高级角色漏洞）：仅在请求会触发角色写入时校验；
     // 空数组与框架 UserService.update 语义一致 = 不改角色，跳过校验
+    // 前置 get 仅为取"当前角色"做授权判定（授权基于请求时快照，结果以请求 roles 为准，极端并发窄窗可接受）
     if (body.roles() != null && body.roles().length > 0) {
       User current = userService.get(id, TenantHeaders.parseLong(tenantHeader));
       roleAssignmentGuard.assertCanChangeRoles(
