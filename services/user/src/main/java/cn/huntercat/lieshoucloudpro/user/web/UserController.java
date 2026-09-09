@@ -20,11 +20,13 @@ import cn.huntercat.lieshou.framework.domain.AuditLog;
 import cn.huntercat.lieshou.framework.domain.User;
 import cn.huntercat.lieshou.framework.service.AuditService;
 import cn.huntercat.lieshou.framework.service.UserService;
+import cn.huntercat.lieshoucloudpro.user.security.RoleAssignmentGuard;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import java.util.List;
 import java.util.Map;
 
 /**
@@ -41,10 +43,13 @@ public class UserController {
 
   private final UserService userService;
   private final AuditService audit;
+  private final RoleAssignmentGuard roleAssignmentGuard;
 
-  public UserController(UserService userService, AuditService audit) {
+  public UserController(
+      UserService userService, AuditService audit, RoleAssignmentGuard roleAssignmentGuard) {
     this.userService = userService;
     this.audit = audit;
+    this.roleAssignmentGuard = roleAssignmentGuard;
   }
 
   @Operation(
@@ -156,8 +161,16 @@ public class UserController {
       @Parameter(description = "User id", example = "1") @PathVariable Long id,
       @Valid @RequestBody UpdateUserRequest body,
       @RequestHeader(value = "X-Tenant-Id", required = false) String tenantHeader,
+      @RequestHeader(value = "X-User-Roles", required = false) String rolesHeader,
       @RequestHeader(value = "X-User-Id", required = false) String userIdHeader,
       HttpServletRequest req) {
+    // 角色授予守卫（2026-09-09 · 低级管理员授高级角色漏洞）：仅在请求会触发角色写入时校验；
+    // 空数组与框架 UserService.update 语义一致 = 不改角色，跳过校验
+    if (body.roles() != null && body.roles().length > 0) {
+      User current = userService.get(id, TenantHeaders.parseLong(tenantHeader));
+      roleAssignmentGuard.assertCanChangeRoles(
+          rolesHeader, current.getRoles(), List.of(body.roles()));
+    }
     User saved =
         userService.update(
             id,

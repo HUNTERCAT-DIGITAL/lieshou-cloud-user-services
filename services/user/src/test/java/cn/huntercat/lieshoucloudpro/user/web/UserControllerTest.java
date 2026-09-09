@@ -26,11 +26,15 @@ import cn.huntercat.lieshou.framework.common.api.BaseException;
 import cn.huntercat.lieshou.framework.common.api.ErrorCode;
 import cn.huntercat.lieshou.framework.common.dto.UserAuthView;
 import cn.huntercat.lieshou.framework.common.web.GlobalExceptionHandler;
+import cn.huntercat.lieshou.framework.domain.Role;
 import cn.huntercat.lieshou.framework.domain.Tenant;
 import cn.huntercat.lieshou.framework.domain.User;
 import cn.huntercat.lieshou.framework.i18n.I18nMessages;
 import cn.huntercat.lieshou.framework.service.AuditService;
+import cn.huntercat.lieshou.framework.service.RoleService;
 import cn.huntercat.lieshou.framework.service.UserService;
+import cn.huntercat.lieshoucloudpro.user.security.RoleAssignmentGuard;
+import java.util.Arrays;
 import java.util.List;
 
 /**
@@ -46,13 +50,16 @@ class UserControllerTest {
 
   @Mock ObjectProvider<I18nMessages> provider;
   @Mock AuditService auditService;
+  @Mock RoleService roleService;
 
   MockMvc mockMvc;
+  private RoleAssignmentGuard guard;
 
   @BeforeEach
   void setUp() {
+    guard = new RoleAssignmentGuard(roleService);
     mockMvc =
-        MockMvcBuilders.standaloneSetup(new UserController(userService, auditService))
+        MockMvcBuilders.standaloneSetup(new UserController(userService, auditService, guard))
             .setControllerAdvice(new GlobalExceptionHandler(provider))
             .build();
   }
@@ -70,6 +77,28 @@ class UserControllerTest {
     Tenant t = new Tenant("猎手云", "huntercat");
     t.setEdition(Tenant.Edition.GENERIC);
     return t;
+  }
+
+  /** 角色字典（code → scope）供守卫用例内联 stub */
+  private static List<Role> roleCatalog() {
+    return List.of(
+        new Role("PLATFORM_ADMIN", "平台管理员", Role.Scope.PLATFORM, null, true),
+        new Role("TENANT_ADMIN", "租户管理员", Role.Scope.TENANT, null, true),
+        new Role("DUTY_OFFICER", "值班员", Role.Scope.TENANT, null, true),
+        new Role("USER", "普通用户", Role.Scope.TENANT, null, true));
+  }
+
+  private static User userWithRoles(Long id, Long tenantId, String... roleCodes) {
+    User u = new User();
+    u.setId(id);
+    u.setTenantId(tenantId);
+    u.setUsername("admin");
+    u.setDisplayName("管理员");
+    u.setRoles(
+        Arrays.stream(roleCodes)
+            .map(c -> new Role(c, c, Role.Scope.TENANT, null, false))
+            .collect(java.util.stream.Collectors.toList()));
+    return u;
   }
 
   @Test
@@ -226,5 +255,40 @@ class UserControllerTest {
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.roles[0]").value("PLATFORM_ADMIN"))
         .andExpect(jsonPath("$.tenantCode").value("huntercat"));
+  }
+
+  @Test
+  void update_租户管理员把用户改为平台管理员返回403() throws Exception {
+    when(roleService.list()).thenReturn(roleCatalog());
+    when(userService.get(1L, 1L)).thenReturn(userWithRoles(1L, 1L, "USER"));
+
+    mockMvc
+        .perform(
+            put("/api/users/1")
+                .header("X-Tenant-Id", "1")
+                .header("X-User-Roles", "TENANT_ADMIN")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"roles\":[\"PLATFORM_ADMIN\"]}"))
+        .andExpect(status().isForbidden())
+        .andExpect(jsonPath("$.error").value("ROLE_ASSIGN_FORBIDDEN"));
+  }
+
+  @Test
+  void update_租户管理员把用户改为值班员放行并落库() throws Exception {
+    when(roleService.list()).thenReturn(roleCatalog());
+    User target = userWithRoles(1L, 1L, "USER");
+    User updated = userWithRoles(1L, 1L, "DUTY_OFFICER");
+    when(userService.get(1L, 1L)).thenReturn(target);
+    when(userService.update(any(), any(), any(), any(), any(), any(), any(), any()))
+        .thenReturn(updated);
+
+    mockMvc
+        .perform(
+            put("/api/users/1")
+                .header("X-Tenant-Id", "1")
+                .header("X-User-Roles", "TENANT_ADMIN")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"roles\":[\"DUTY_OFFICER\"]}"))
+        .andExpect(status().isOk());
   }
 }
