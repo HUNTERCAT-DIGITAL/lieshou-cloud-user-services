@@ -1,15 +1,20 @@
 # syntax=docker/dockerfile:1.7
 # LieShouCloud · User Service (port 8081) multi-stage
-# docker build context = 仓库根(含 framework submodule + services/,mvn -f pom.xml 一次聚合构建)
+# docker build context = 仓库根（services/ 一层即可，上游 framework 走 Nexus，本仓无 submodule）
+# 依赖：maven-public（内网 Nexus · Caddy 内部 CA → builder 里 keytool 导入 services/.ci/caddy-root.crt）
 
 FROM maven:3.9-eclipse-temurin-21 AS builder
 WORKDIR /workspace
 COPY . /workspace/
 
+# 内部 CA 进 JVM 信任库（否则 https://nexus.ts.huntercat.cn 报 PKIX）
+RUN keytool -importcert -noprompt -trustcacerts -alias caddy-root \
+      -file /workspace/services/.ci/caddy-root.crt \
+      -keystore "$JAVA_HOME/lib/security/cacerts" -storepass changeit
 COPY services/.m2-settings.xml /root/.m2/settings.xml
 
 RUN --mount=type=cache,target=/root/.m2 \
-    mvn -B -ntp -Dmaven.test.skip=true -f pom.xml -pl services/user -am clean package
+    mvn -B -ntp -Dmaven.test.skip=true -f pom.xml -pl services/user clean package
 
 FROM eclipse-temurin:21-jre-alpine AS runtime
 RUN addgroup -S app && adduser -S app -G app
@@ -26,6 +31,6 @@ USER app
 EXPOSE 8081
 
 HEALTHCHECK --interval=30s --timeout=5s --start-period=40s --retries=3 \
-    CMD wget -Y off -qO- http://127.0.0.1:8081/actuator/health >/dev/null || exit 1
+  CMD wget -Y off -qO- http://127.0.0.1:8081/actuator/health >/dev/null || exit 1
 
 ENTRYPOINT ["java", "-jar", "/app/app.jar"]

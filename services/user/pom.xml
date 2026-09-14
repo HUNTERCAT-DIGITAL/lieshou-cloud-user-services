@@ -9,7 +9,6 @@
         <groupId>cn.huntercat</groupId>
         <artifactId>framework-parent</artifactId>
         <version>0.3.1</version>
-        <relativePath>../../framework/framework-parent/pom.xml</relativePath>
     </parent>
 
     <artifactId>lieshoucloud-user</artifactId>
