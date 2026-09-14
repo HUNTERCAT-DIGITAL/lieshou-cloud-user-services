@@ -10,12 +10,12 @@
       + services/user
     一次构建：mvn -f pom.xml package
     说明：framework-* 依赖在 reactor 内解析，无需先 install；
-          缺 framework submodule 时，需先从 lieshou-framework 发版（0.3.0）装到本地仓。
+          缺 framework submodule 时，需先从 lieshou-framework 发版（0.3.1）装到本地仓。
   -->
   <groupId>cn.huntercat</groupId>
   <artifactId>lieshoucloud-user-services-aggregator</artifactId>
   <!-- 聚合器自身坐标：不发布、不被任何模块作为 parent 引用，故与 framework 版本线解耦。
-       服务模块的版本来自 framework-parent（当前 0.3.0）。 -->
+       服务模块的版本来自 framework-parent（当前 0.3.1）。 -->
   <version>0.1.0</version>
   <packaging>pom</packaging>
 

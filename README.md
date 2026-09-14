@@ -2,7 +2,7 @@
 
 > 自 lieshou-cloud-core/services/user 拆分(2026-08 细粒度)。
 > 聚合构建：`framework` submodule + `services/user` 同处一个 reactor 一次成包。
-> 统一 parent/BOM 来自 lieshou-framework 的 `framework-parent`（0.3.0 起）。
+> 统一 parent/BOM 来自 lieshou-framework 的 `framework-parent`（0.3.1 起）。
 
 ```bash
 # 在仓根执行（不要 cd services —— 旧聚合父 pom 已删除）
