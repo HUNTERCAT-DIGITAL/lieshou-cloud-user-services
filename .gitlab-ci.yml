@@ -1,0 +1,70 @@
+# lieshou-cloud · user-services 质量门禁（GitLab CI · 2026-09）
+# 前置：huntercat-digital 组级 docker runner（java-maven @ wqc-server-dell · tags: java,wqc）
+# 门 = mvn -B -ntp verify（spotless:check + 单测 + jacoco，由 framework-parent 统一绑定）
+#      PG 集成测试：CI 由下面的 postgres service 提供真库（本地开发仍走 Testcontainers——
+#      宿主 ufw INPUT DROP 会挡掉 job 容器 → 宿主随机发布端口的回连，走容器网络 alias 才稳）
+stages: [verify, deploy]
+
+variables:
+  # 内网 Caddy 自签证书不在 job 容器信任库 → 放行 git 传输（对齐 mobile-web / auth-services 先例）
+  GIT_SSL_NO_VERIFY: "true"
+  # 不用 GitLab 的隐式递归：它在 before_script 之前执行且不 sync URL（房内事故结论），
+  # 子仓 URL 是 ssh://…:22220/…，job 容器里没有私钥 → 必须自己重写成 CI_JOB_TOKEN 的 HTTPS
+  GIT_SUBMODULE_STRATEGY: none
+  # 依赖缓存由 runner 宿主卷提供（/srv/gitlab-runner-cache/m2 → /root/.m2）
+  # —— postgres service（镜像/版本与 PostgresTestSupport 的 Testcontainers 一致）——
+  POSTGRES_DB: lieshoucloudpro
+  POSTGRES_USER: postgres
+  POSTGRES_PASSWORD: postgres
+  SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/lieshoucloudpro
+  SPRING_DATASOURCE_USERNAME: postgres
+  SPRING_DATASOURCE_PASSWORD: postgres
+
+default:
+  image: maven:3.9-eclipse-temurin-21
+  tags: [java, wqc]
+
+verify:
+  stage: verify
+  timeout: 30m
+  services:
+    - name: postgres:16-alpine
+      alias: postgres
+  before_script:
+    - git config --global url."https://gitlab-ci-token:${CI_JOB_TOKEN}@gitlab.ts.huntercat.cn/huntercat-digital/".insteadOf "ssh://git@gitlab.ts.huntercat.cn:22220/huntercat-digital/"
+    - git submodule sync --recursive
+    - git submodule update --init --recursive
+  script:
+    - java -version
+    - mvn -B -ntp verify
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
+    - if: '$CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH'
+    - if: '$CI_COMMIT_TAG'
+
+# 制品发布：仅 tag 触发，发到内网 Nexus maven-releases（凭证在项目 CI 变量 NEXUS_DEPLOY_*）
+# 坐标 cn.huntercat:lieshoucloud-user:<version>（版本继承 framework-parent，故 tag 必须 vX.Y.Z 对齐）
+# 只发本仓模块：framework-* 由 framework 仓自己发布（同坐标重复发布会撞 Nexus 重发策略）
+deploy:
+  stage: deploy
+  timeout: 30m
+  rules:
+    - if: '$CI_COMMIT_TAG'
+  before_script:
+    # 根 pom 的 <module>framework</module> 必须真的存在（空目录 → "Child module does not exist"）
+    - git config --global url."https://gitlab-ci-token:${CI_JOB_TOKEN}@gitlab.ts.huntercat.cn/huntercat-digital/".insteadOf "ssh://git@gitlab.ts.huntercat.cn:22220/huntercat-digital/"
+    - git submodule sync --recursive
+    - git submodule update --init --recursive
+  script:
+    # tag 必须与 pom 版本一致，否则拒发（防止 v0.4.0 下发成 0.3.1）
+    - |
+      set -e
+      ver=$(mvn -B -q -pl services/user help:evaluate -Dexpression=project.version -DforceStdout | tail -1)
+      [ "$CI_COMMIT_TAG" = "v$ver" ] || { echo "❌ tag $CI_COMMIT_TAG 与 pom 版本 v$ver 不一致"; exit 1; }
+      echo "发布 cn.huntercat:lieshoucloud-user:$ver → Nexus maven-releases"
+    # 内部 CA 进 JVM 信任库（job 容器不认 Caddy 自签 CA；CA 由 runner 挂载卷 /root/.m2 提供）
+    - keytool -importcert -noprompt -trustcacerts -alias caddy-root -file /root/.m2/caddy-root.crt -keystore "$JAVA_HOME/lib/security/cacerts" -storepass changeit
+    # servers = 发布凭证；mirror 只服务读（*,!nexus 不劫持 distributionManagement 的 nexus）
+    - printf '<settings><servers><server><id>nexus</id><username>%s</username><password>%s</password></server></servers><mirrors><mirror><id>nexus-public</id><url>https://nexus.ts.huntercat.cn/repository/maven-public/</url><mirrorOf>*,!nexus</mirrorOf></mirror></mirrors></settings>' "$NEXUS_DEPLOY_USER" "$NEXUS_DEPLOY_PASS" > /tmp/ci-settings.xml
+    # -pl 只发 user（依赖 framework-* 从 maven-public 解析）；测试已在 verify 阶段卡过
+    - mvn -B -ntp -s /tmp/ci-settings.xml -pl services/user -DskipTests deploy

@@ -1,5 +1,11 @@
 package cn.huntercat.lieshoucloudpro.user.security;
 
+import org.springframework.http.HttpStatus;
+import org.springframework.stereotype.Component;
+
+import cn.huntercat.lieshou.framework.common.api.BaseException;
+import cn.huntercat.lieshou.framework.domain.Role;
+import cn.huntercat.lieshou.framework.service.RoleService;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -8,20 +14,12 @@ import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
 
-import org.springframework.http.HttpStatus;
-import org.springframework.stereotype.Component;
-
-import cn.huntercat.lieshou.framework.common.api.BaseException;
-import cn.huntercat.lieshou.framework.domain.Role;
-import cn.huntercat.lieshou.framework.service.RoleService;
-
 /**
  * 角色授予守卫（2026-09-09 · 低级管理员授高级角色漏洞修复）.
  *
- * <p>规则（按调用者角色定"可授予集" G）：PLATFORM_ADMIN → 全部角色；TENANT_ADMIN → 仅 scope=TENANT
- * 角色（不在角色表中的未知码视作 TENANT scope，放行给业务层报 INVALID_ROLE）；其余（USER/值班员/无角色）→
- * 空集。请求 roles 为空或与目标当前角色集合相等（资料编辑原样回传）→ 放行；否则要求 current ∪ requested ⊆ G，
- * 违反抛 403 {@code ROLE_ASSIGN_FORBIDDEN}。
+ * <p>规则（按调用者角色定"可授予集" G）：PLATFORM_ADMIN → 全部角色；TENANT_ADMIN → 仅 scope=TENANT 角色（不在角色表中的未知码视作 TENANT
+ * scope，放行给业务层报 INVALID_ROLE）；其余（USER/值班员/无角色）→ 空集。请求 roles 为空或与目标当前角色集合相等（资料编辑原样回传）→ 放行；否则要求
+ * current ∪ requested ⊆ G， 违反抛 403 {@code ROLE_ASSIGN_FORBIDDEN}。
  */
 @Component
 public class RoleAssignmentGuard {
@@ -64,7 +62,8 @@ public class RoleAssignmentGuard {
   }
 
   /** 调用者是否可授予/持有单角色码（未知码不在表中，按 TENANT scope 放行，由业务层报 INVALID_ROLE）. */
-  private boolean grantable(Set<String> callerRoles, Map<String, Role.Scope> scopeByCode, String roleCode) {
+  private boolean grantable(
+      Set<String> callerRoles, Map<String, Role.Scope> scopeByCode, String roleCode) {
     if (callerRoles.contains(PLATFORM_ADMIN)) {
       return true;
     }

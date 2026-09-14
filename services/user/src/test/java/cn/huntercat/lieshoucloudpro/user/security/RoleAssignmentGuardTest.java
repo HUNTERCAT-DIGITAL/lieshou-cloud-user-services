@@ -1,11 +1,5 @@
 package cn.huntercat.lieshoucloudpro.user.security;
 
-import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
-import static org.junit.jupiter.api.Assertions.assertThrows;
-import static org.mockito.Mockito.when;
-
-import java.util.List;
-
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -14,9 +8,14 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.mockito.junit.jupiter.MockitoSettings;
 import org.mockito.quality.Strictness;
 
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.mockito.Mockito.when;
+
 import cn.huntercat.lieshou.framework.common.api.BaseException;
 import cn.huntercat.lieshou.framework.domain.Role;
 import cn.huntercat.lieshou.framework.service.RoleService;
+import java.util.List;
 
 /** 角色授予守卫单测：谁可授予哪些角色（2026-09-09 设计 §2.1）. */
 @ExtendWith(MockitoExtension.class)
@@ -50,8 +49,7 @@ class RoleAssignmentGuardTest {
   void 平台管理员可授予平台域角色() {
     assertDoesNotThrow(
         () ->
-            guard.assertCanChangeRoles(
-                "PLATFORM_ADMIN", roles("USER"), List.of("PLATFORM_ADMIN")));
+            guard.assertCanChangeRoles("PLATFORM_ADMIN", roles("USER"), List.of("PLATFORM_ADMIN")));
   }
 
   @Test
@@ -76,18 +74,14 @@ class RoleAssignmentGuardTest {
   void 租户管理员授平台域角色被拒() {
     assertThrows(
         BaseException.class,
-        () ->
-            guard.assertCanChangeRoles(
-                "TENANT_ADMIN", roles("USER"), List.of("PLATFORM_ADMIN")));
+        () -> guard.assertCanChangeRoles("TENANT_ADMIN", roles("USER"), List.of("PLATFORM_ADMIN")));
   }
 
   @Test
   void 租户管理员改平台管理员用户角色被拒() {
     assertThrows(
         BaseException.class,
-        () ->
-            guard.assertCanChangeRoles(
-                "TENANT_ADMIN", roles("PLATFORM_ADMIN"), List.of("USER")));
+        () -> guard.assertCanChangeRoles("TENANT_ADMIN", roles("PLATFORM_ADMIN"), List.of("USER")));
   }
 
   @Test
@@ -115,9 +109,7 @@ class RoleAssignmentGuardTest {
   @Test
   void 未知角色码放行交给业务层报INVALID_ROLE() {
     assertDoesNotThrow(
-        () ->
-            guard.assertCanChangeRoles(
-                "TENANT_ADMIN", roles("USER"), List.of("NOT_IN_TABLE")));
+        () -> guard.assertCanChangeRoles("TENANT_ADMIN", roles("USER"), List.of("NOT_IN_TABLE")));
   }
 
   /** Role → List（便于测试内聚） */
