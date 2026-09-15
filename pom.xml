@@ -14,7 +14,7 @@
   <groupId>cn.huntercat</groupId>
   <artifactId>lieshoucloud-user-services-aggregator</artifactId>
   <!-- 聚合器自身坐标：不发布、不被任何模块作为 parent 引用，故与 framework 版本线解耦。
-       服务模块的版本来自 framework-parent（当前 0.3.1）。 -->
+       服务模块的版本来自 framework-parent（当前 0.3.3）。 -->
   <version>0.1.0</version>
   <packaging>pom</packaging>
 
